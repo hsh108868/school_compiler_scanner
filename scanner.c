@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 
@@ -16,13 +17,13 @@ enum tsymbol { tnull = -1, /* 토큰들의 토큰 번호 */
 #define NO_KEYWORDS 7 /* 단어 심벌의 개수 */
 #define ID_LENGTH 12 /* 유효한 길이를 정의하는 상수 */
 
-typedef struct s_tokenType { /* 파서에게 넘겨주는 구조체 == 스캐너의 출력 */
+typedef struct tokenType { /* 파서에게 넘겨주는 구조체 == 스캐너의 출력 */
 	int number; /* 토큰 번호 */
 	union {
 		char id[ID_LENGTH];
 		int num;
 	} value; /* 토큰 벨류 */
-}	t_tokenType;
+}	tokenType;
 
 /* 각 지정어의 스트링 값을 갖는 배열 */
 char	*keyword[NO_KEYWORDS] = {
@@ -66,15 +67,218 @@ int	superLetterOrDigit(char ch)
 		return (0);
 }
 
-void	scanner(FILE *fp, t_tokenType *token)
+struct tokenType scanner()
 {
-	
-}
+	struct tokenType token;
+	int i, index;
+	char ch, id[ID_LENGTH];
+
+	token.number = tnull;
+	do
+	{
+		while (isspace(ch = getchar())) ; // state 1: skip blanks
+		if (superLetter(ch)) // identifier or keyword
+		{
+			i = 0;
+			do
+			{
+				if (i < ID_LENGTH)
+					id[i++] = ch;
+				ch = getchar();
+			} while (superLetterOrDigit(ch));
+			if (i >= ID_LENGTH)
+				lexicalError(1);
+			id[i] = '\0';
+			ungetc(ch, stdin); // retract
+			// find the identifier in the keyword table
+			for (index = 0; index < NO_KEYWORDS; index++)
+			{
+				if (!strcmp(id, keyword[index]))
+					break ;
+			}
+			if (index < NO_KEYWORDS) // found, keyword exit
+				token.number = tnum[index];
+			else
+			{
+				token.number = tident;
+				strcpy(token.value.id, id);
+			}
+		} // end of identifier or keyword
+		else if (isdigit(ch)) // integer constant
+		{
+			token.number = tnumber;
+			token.value.num = getIntNum(ch); // 해당 함수가 라이브러리에 없어용
+		}
+		else switch (ch) // special character
+		{
+			case '/': // state 10
+				ch = getchar();
+				if (ch == '*') // text comment
+				{
+					do
+					{
+						while (ch != '*')
+							ch = getchar();
+						ch = getchar();
+					} while (ch != '/');
+				}
+				else if (ch == '/') // line comment
+					while (getchar() != '\n')
+						;
+				else if (ch == '=')
+					token.number = tdivAssign;
+				else
+				{
+					token.number = tdiv;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '!': // state 17
+				ch = getchar();
+				if (ch == '=')
+					token.number = tnotequ;
+				else
+				{
+					token.number = tnot;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '%': // state 20
+				ch = getchar();
+				if (ch == '=')
+					token.number = tmodAssign;
+				else
+				{
+					token.number = tmod;
+					ungetc(ch, stdin);
+				}
+				break ;
+			case '&': // state 23
+				ch = getchar();
+				if (ch == '&')
+					token.number = tand;
+				else
+				{
+					lexicalError(2);
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '*': // state 25
+				ch = getchar();
+				if (ch == '=')
+					token.number = tmulAssign;
+				else
+				{
+					token.number = tmul;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '+': // state 28
+				ch = getchar();
+				if (ch == '+')
+					token.number = tinc;
+				else if (ch == '=')
+					token.number = taddAssign;
+				else
+				{
+					token.number = tplus;
+					ungetc(ch , stdin); // retract
+				}
+				break ;
+			case '-': // state 32
+				ch = getchar();
+				if (ch == '-')
+					token.number = tdec;
+				else if (ch == '=')
+					token.number = tsubAssign;
+				else
+				{
+					token.number = tminus;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '<': // state 36
+				ch = getchar();
+				if (ch == '=')
+					token.number = tlesse;
+				else
+				{
+					token.number = tless;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '=': // state 39
+				ch = getchar();
+				if (ch == '=')
+					token.number = tequal;
+				else
+				{
+					token.number = tassgin;
+					ungetc(ch , stdin); // retract
+				}
+				break ;
+			case '>': // state 42
+				ch = getchar();
+				if (ch == '=')
+					token.number = tgreate;
+				else
+				{
+					token.number = tgreat;
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '|': // state 45
+				ch = getchar();
+				if (ch == '|')
+					token.number = tor;
+				else
+				{
+					lexicalError(3);
+					ungetc(ch, stdin); // retract
+				}
+				break ;
+			case '(':
+				token.number = tlparen;
+				break ;
+			case ')':
+				token.number = trparen;
+				break ;
+			case ',':
+				token.number = tcomma;
+				break ;
+			case ';':
+				token.number = tsemicolon;
+				break ;
+			case '[':
+				token.number = tlbracket;
+				break ;
+			case ']':
+				token.number = trbracket;
+				break ;
+			case '{':
+				token.number = tlbrace;
+				break ;
+			case '}':
+				token.number = trbrace;
+				break ;
+			case EOF:
+				token.number = teof;
+				break ;
+			default:
+			{
+				printf("Current character: %c", ch);
+				lexicalError(4);
+				break ;
+			}
+		} // switch end
+	} while (token.number == tnull);
+	return token;
+} // end of scanner
 
 int	main(int argc, char *argv[])
 {
 	int	i;
-	t_tokenType token;
+	tokenType token;
 	FILE *fp;
 
 	if ((fp = fopen("prime.mc", "r")) == NULL)
