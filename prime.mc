@@ -1,1 +1,1 @@
-const int max = 10;
+const int max = 20;
